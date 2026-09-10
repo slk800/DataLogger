@@ -1,0 +1,16 @@
+# Keil build intermediates
+MDK-ARM/DataLogger/*.o
+MDK-ARM/DataLogger/*.d
+MDK-ARM/DataLogger/*.crf
+MDK-ARM/DataLogger/*.dep
+MDK-ARM/DataLogger/*.lnp
+MDK-ARM/DataLogger/*.htm
+MDK-ARM/DataLogger/*.sct
+
+# Keep delivery reports
+!MDK-ARM/DataLogger/DataLogger.build_log.htm
+
+# IDE and user state
+MDK-ARM/.vscode/
+MDK-ARM/*.uvguix.*
+*.lock
