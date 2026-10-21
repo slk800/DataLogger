@@ -102,7 +102,7 @@ Home -> System -> Flash -> Log -> Config
 help  ls  cat  rm  erase  status  task  heap  set  get  save  loglvl  reset
 ```
 
-配置键：`sample_ms`、`log_level`、`max_log`、`name`。`set` 只改内存，需 `save` 才写入 A/B 区。
+配置键：`sample_ms`、`log_level`、`name`。`set` 只改内存，需 `save` 才写入 A/B 区。
 
 ## 编译
 
@@ -144,10 +144,136 @@ CLI/        可选 13 条命令
 Core/       CubeMX / HAL
 Utils/      CRC32 等
 MDK-ARM/    Keil 工程
+Protocol/   协议帧层（COBS / CRC16 / 帧解析，纯逻辑无 HAL 依赖）
+Domain/     时间换算、记录编解码、报警状态机、MKT（纯逻辑，可主机侧测试）
+docs/       协议、记录格式、功耗设计
+tools/      PC 端工具（dltool / fake_device / dlproto）
+tests/      主机侧单测与端到端测试
 ```
 
-`Core/Src/freertos.c` 里 CubeMX 生成的 `defaultTask`（Flash/CRC 试验代码）**不会启动**：`main()` 只调用 `App_Init()`，由其中的 `vTaskStartScheduler()` 接管。
+`Core/Src/freertos.c` 只保留内核钩子与静态内存回调；CubeMX 自带的 `defaultTask` 及其实验代码已移除。所有应用任务由 `App_Init()` 创建，`main()` 之后由 `vTaskStartScheduler()` 接管。
+
+## 低功耗（可选）
+
+打开 `APP_ENABLE_RECORDER` 且检测到 PCF8563 时，系统自动启用 tickless + STOP：
+
+```text
+空闲 → 关 SysTick → OLED 休眠 + Flash 深睡 → STOP
+     ← EXTI（PCF8563 CLKOUT 1 Hz）或按键唤醒
+```
+
+| 改动 | 效果 |
+| --- | --- |
+| `configUSE_TICKLESS_IDLE = 2` + 自定义 `vPortSuppressTicksAndSleep` | 空闲时 CPU 停在 STOP（20 µA） |
+| 按键改 EXTI 唤醒 | 消除 50 ms 轮询（约 1.4 mA） |
+| OLED 事件驱动 + 空闲降频 | 常态不刷新 |
+| OLED 关电荷泵、W25Q64 深睡 | 8 mA → 10 µA、4 mA → 1 µA |
+| `vTaskDelayUntil` 固定采样周期 | 周期不受 Flash 写入影响 |
+
+功耗预算模型（`tools/power_budget.py`，按数据手册值）：
+
+```text
+60 s 采样 · 干净配置（拆 LED + HT7333 + 裸 NTC）   54 µA  ≈ 772 天（1000 mAh）
+60 s 采样 · 原版 Blue Pill                        7.05 mA ≈ 6 天
+```
+
+差距来自**板级固定开销**（电源 LED 2 mA + AMS1117 4 mA + NTC 模块 1 mA），
+软件无法消除。完整分析见 [docs/power.md](docs/power.md)。
+
+> W3 实测数字待硬件到位后填入 docs/power.md §5。
+
+## 记录格式 v2 与运输场景（可选）
+
+打开 `APP_ENABLE_RECORDER` 后启用 v2 记录任务（需 PCF8563）：
+
+```c
+#define APP_ENABLE_RECORDER        1   /* 与 APP_ENABLE_DATA_PRODUCER 互斥 */
+```
+
+| 能力 | 说明 |
+| --- | --- |
+| 墙钟时间戳 | PCF8563（I2C1，与 OLED 共用），记录写入 UTC 秒 |
+| 16 字节记录 | 60 s 采样可存 **90 天**（129600 条 × 16 B ≈ 2.07 MB） |
+| 双通道 | CH1 真实 NTC；CH2 预留（未接时记 INVALID） |
+| 报警 | 上下限 + 回差 + 最短持续时间，事件写入独立 `events` 文件 |
+| MKT | 平均动力学温度，冷链/医药行业指标 |
+| 时钟丢失标记 | PCF8563 的 VL 位，记录 flags bit3 |
+
+报警配置（单位 0.01 °C，可用 `set` / 协议写入）：
+
+```text
+t_low=200  t_high=800  t_hyst=50  t_dur=60
+```
+
+生成运输报告（内嵌 SVG，无需 matplotlib）：
+
+```bash
+python tools/dltool.py --port COM3 verify --name sample -o sample.bin
+python tools/dltool.py --port COM3 events --dump -o events.bin
+python tools/dlreport.py sample.bin --events events.bin -o report.html
+```
+
+报告包含 min/max/mean/MKT、超限区间（PC 侧独立重放状态机）、设备端事件表。
+
+## 数据导出（可选）
+
+打开 `App/app_init.h` 的 `APP_ENABLE_PROTO` 后，同一串口同时支持**文本 CLI** 和**二进制协议**：
+
+```c
+#define APP_ENABLE_PROTO           1
+```
+
+上位机工具（无需额外安装，除 `pyserial` 外无依赖）：
+
+```bash
+pip install pyserial
+
+python tools/dltool.py --port COM3 info            # 握手 + 存储状态
+python tools/dltool.py --port COM3 ls              # 列出文件
+python tools/dltool.py --port COM3 verify --name sample -o sample.bin
+python tools/dltool.py --port COM3 plot sample.bin # 生成 CSV（装 matplotlib 则同时出图）
+```
+
+协议规范见 [docs/protocol.md](docs/protocol.md)。要点：
+
+- COBS 分帧 + CRC16/CCITT-FALSE + 序号停等重传
+- `verify` 会比对设备端文件级 CRC32 与 PC 端重算值，不一致即判定导出失败
+- `dump --resume` 支持断点续传
+
+开启协议 + v2 记录 + 低功耗后资源占用：**ROM 54768 B（83.6%）、RAM 18456 B（90.1%）**，0 Error / 0 Warning。
+
+## 故障诊断
+
+栈溢出或堆申请失败时，钩子只写 volatile 变量与 BKP 备份寄存器，不调用 UART、队列或互斥量，避免二次故障掩盖根因。故障码与任务名在复位后仍可读：
+
+- OLED `System` 页显示 `Flt`（上次故障）与 `Boot`（启动次数）
+- CLI `status` 输出 `LastFault`、`Boot` 与本次的 `RCC_CSR` 复位标志
+
+故障码：`0` 正常、`1` 栈溢出、`2` 堆申请失败。
+
+## 测试
+
+不需要硬件：
+
+```bash
+bash tests/run_host_check.sh      # gcc + 桩头文件，编译检查全部业务源码
+bash tests/run_fault_test.sh      # 故障码跨复位保留行为
+bash tests/run_proto_tests.sh     # 协议：C 单测 + C/Python 线格式交叉 + 假设备端到端
+bash tests/run_domain_tests.sh    # 领域层：时间/记录/报警/MKT + 报警状态机 C/Python 交叉 + 报告
+bash tests/run_w3_tests.sh        # 功耗预算模型 + 无硬件演示（导出样本/事件/生成报告）
+
+# 无硬件演示（生成 sample.bin / events.bin / report.html）
+python tools/demo.py --out demo/
+# 功耗预算
+python tools/power_budget.py --interval 60
+python tools/power_budget.py --interval 60 --board-led --no-ldo-swap --sensor-module
+```
+
+`run_proto_tests.sh` 的端到端部分会把丢包率调到 60%、并注入垃圾字节，
+用来验证重传与流重同步。
 
 ## License
 
-本仓库未指定许可证。引用或二次开发请保留作者信息，并自行评估 W25Q64 简易文件存储的适用边界（非 LittleFS，无完整磨损均衡）。
+[MIT](LICENSE) © 2026 SLK800。STM32 HAL/CMSIS 与 FreeRTOS 按各自原始许可证分发，详见 `Drivers/` 与 `Middlewares/` 下的 LICENSE 文件。
+
+W25Q64 上的是简化文件系统（非 LittleFS，无完整磨损均衡），请自行评估适用边界。

@@ -4,6 +4,7 @@
  */
 
 #include "global.h"
+#include "task_recorder.h"
 
 static UiStatus_t s_ui_status;
 static SemaphoreHandle_t s_ui_mutex;
@@ -97,6 +98,25 @@ void UI_Status_UpdateSystem(void)
     s_ui_status.log_dropped = g_log_dropped;
     s_ui_status.heap_free = xPortGetFreeHeapSize();
     s_ui_status.heap_min = xPortGetMinimumEverFreeHeapSize();
+    s_ui_status.last_fault_code = Fault_GetLastCode();
+    s_ui_status.boot_count = Fault_GetBootCount();
+    s_ui_status.reset_flags = Fault_GetResetFlags();
+    s_ui_status.utc = Recorder_GetUtc();
+    s_ui_status.mkt_x100 = Recorder_GetMkt();
+    s_ui_status.event_count = Recorder_GetEventCount();
+    s_ui_status.alarm_low_x100 = (uint16_t)(int16_t)g_config.alarm_low_x100;
+    s_ui_status.alarm_high_x100 = (uint16_t)(int16_t)g_config.alarm_high_x100;
+    {
+        const AlarmCtx_t *alarm = Recorder_GetAlarm();
+        if (alarm != NULL && Alarm_IsActive(alarm))
+        {
+            s_ui_status.alarm_state = (alarm->state == ALARM_STATE_HIGH) ? 1U : 2U;
+        }
+        else
+        {
+            s_ui_status.alarm_state = 0U;
+        }
+    }
     UI_Status_CopyConfig(&s_ui_status);
     xSemaphoreGive(s_ui_mutex);
 }

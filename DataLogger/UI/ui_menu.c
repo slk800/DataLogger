@@ -237,8 +237,21 @@ static void UI_Menu_RenderHome(const UiStatus_t *st)
     UI_Menu_Line(1U, line);
     snprintf(line, sizeof(line), "Cnt :%lu", st->sample_count);
     UI_Menu_Line(2U, line);
-    snprintf(line, sizeof(line), "Tick:%lu", st->tick_ms);
-    UI_Menu_Line(3U, line);
+    if (st->alarm_state == 1U)
+    {
+        UI_Menu_Line(3U, "ALARM: HIGH !");
+    }
+    else if (st->alarm_state == 2U)
+    {
+        UI_Menu_Line(3U, "ALARM: LOW !");
+    }
+    else
+    {
+        snprintf(line, sizeof(line), "MKT :%d.%02d C",
+                 (int)(st->mkt_x100 / 100),
+                 (int)((st->mkt_x100 < 0 ? -st->mkt_x100 : st->mkt_x100) % 100));
+        UI_Menu_Line(3U, line);
+    }
     snprintf(line, sizeof(line), "Drop:%lu", st->log_dropped);
     UI_Menu_Line(4U, line);
 }
@@ -257,6 +270,22 @@ static void UI_Menu_RenderStatus(const UiStatus_t *st)
     UI_Menu_Line(4U, line);
     snprintf(line, sizeof(line), "ADC:%u", st->adc_raw);
     UI_Menu_Line(5U, line);
+    snprintf(line, sizeof(line), "Flt:%s", Fault_CodeName(st->last_fault_code));
+    UI_Menu_Line(6U, line);
+    {
+        DateTime_t dt;
+        if (st->utc != 0U && Time_FromUnix(st->utc, &dt))
+        {
+            snprintf(line, sizeof(line), "%02u-%02u %02u:%02u:%02u",
+                     (unsigned)dt.month, (unsigned)dt.day,
+                     (unsigned)dt.hour, (unsigned)dt.minute, (unsigned)dt.second);
+        }
+        else
+        {
+            snprintf(line, sizeof(line), "Clock: NOT SET");
+        }
+    }
+    UI_Menu_Line(7U, line);
 }
 
 static void UI_Menu_RenderFlash(const UiStatus_t *st)
@@ -281,8 +310,14 @@ static void UI_Menu_RenderLog(const UiStatus_t *st)
     UI_Menu_Line(1U, line);
     snprintf(line, sizeof(line), "Drop :%lu", st->log_dropped);
     UI_Menu_Line(2U, line);
-    UI_Menu_Line(3U, "Last:");
-    UI_Menu_Line(4U, st->latest_msg);
+    snprintf(line, sizeof(line), "Limit:%d..%d",
+             (int)((int16_t)st->alarm_low_x100 / 100),
+             (int)((int16_t)st->alarm_high_x100 / 100));
+    UI_Menu_Line(3U, line);
+    snprintf(line, sizeof(line), "Evt :%lu", st->event_count);
+    UI_Menu_Line(4U, line);
+    UI_Menu_Line(6U, "Last:");
+    UI_Menu_Line(7U, st->latest_msg);
 }
 
 static void UI_Menu_RenderConfig(const UiStatus_t *st)

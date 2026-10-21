@@ -16,6 +16,7 @@
 #include "fs_core.h"
 #include "fs_file.h"
 #include "utils.h"
+#include "task_recorder.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -244,6 +245,15 @@ static void cmd_status(int argc, char *argv[])
     BSP_UART_SendString(buf);
     snprintf(buf, sizeof(buf), "Files: %u\r\n", file_count);
     BSP_UART_SendString(buf);
+    snprintf(buf, sizeof(buf), "LastFault: %s(%lu) task=%s\r\n",
+             Fault_CodeName(Fault_GetLastCode()),
+             (unsigned long)Fault_GetLastCode(),
+             Fault_GetLastTaskName());
+    BSP_UART_SendString(buf);
+    snprintf(buf, sizeof(buf), "Boot: %lu  RCC_CSR: 0x%08lX\r\n",
+             (unsigned long)Fault_GetBootCount(),
+             (unsigned long)Fault_GetResetFlags());
+    BSP_UART_SendString(buf);
 }
 
 static void cmd_task(int argc, char *argv[])
@@ -353,6 +363,75 @@ static void cmd_reset(int argc, char *argv[])
     NVIC_SystemReset();
 }
 
+static void cmd_time(int argc, char *argv[])
+{
+    char buf[64];
+    DateTime_t dt;
+
+    if (argc >= 2)
+    {
+        uint32_t utc = (uint32_t)Utils_StrToInt(argv[1]);
+        if (Recorder_SetUtc(utc))
+        {
+            BSP_UART_SendString("time set\r\n");
+        }
+        else
+        {
+            BSP_UART_SendString("time set FAILED (RTC missing?)\r\n");
+        }
+        return;
+    }
+
+    if (Recorder_GetUtc() == 0U || !Time_FromUnix(Recorder_GetUtc(), &dt))
+    {
+        BSP_UART_SendString("clock: NOT SET\r\n");
+        return;
+    }
+
+    snprintf(buf, sizeof(buf), "clock: %04u-%02u-%02u %02u:%02u:%02u UTC\r\n",
+             (unsigned)dt.year, (unsigned)dt.month, (unsigned)dt.day,
+             (unsigned)dt.hour, (unsigned)dt.minute, (unsigned)dt.second);
+    BSP_UART_SendString(buf);
+}
+
+static void cmd_alarm(int argc, char *argv[])
+{
+    char buf[80];
+    const AlarmCtx_t *ctx = Recorder_GetAlarm();
+
+    (void)argc;
+    (void)argv;
+
+    if (ctx == NULL)
+    {
+        BSP_UART_SendString("alarm: unavailable\r\n");
+        return;
+    }
+
+    snprintf(buf, sizeof(buf), "limit: %d..%d hyst=%d dur=%us\r\n",
+             (int)ctx->cfg.low_x100, (int)ctx->cfg.high_x100,
+             (int)ctx->cfg.hyst_x100, (unsigned)ctx->cfg.min_duration_s);
+    BSP_UART_SendString(buf);
+
+    snprintf(buf, sizeof(buf), "state: %s  events=%lu\r\n",
+             Alarm_IsActive(ctx) ? "ACTIVE" : "normal",
+             (unsigned long)Recorder_GetEventCount());
+    BSP_UART_SendString(buf);
+}
+
+static void cmd_mkt(int argc, char *argv[])
+{
+    char buf[48];
+    int16_t mkt = Recorder_GetMkt();
+
+    (void)argc;
+    (void)argv;
+
+    snprintf(buf, sizeof(buf), "MKT: %d.%02d C\r\n",
+             (int)(mkt / 100), (int)((mkt < 0 ? -mkt : mkt) % 100));
+    BSP_UART_SendString(buf);
+}
+
 /* ========== 命令注册 ========== */
 
 void CLI_RegisterAllCmds(void)
@@ -370,4 +449,7 @@ void CLI_RegisterAllCmds(void)
     CLI_Register("save",   cmd_save,   "Save config to flash");
     CLI_Register("loglvl", cmd_loglvl, "Set log level (0-3)");
     CLI_Register("reset",  cmd_reset,  "System reset");
+    CLI_Register("time",   cmd_time,   "Show/set clock: time [utc]");
+    CLI_Register("alarm",  cmd_alarm,  "Show alarm limits and state");
+    CLI_Register("mkt",    cmd_mkt,    "Show mean kinetic temperature");
 }

@@ -53,6 +53,15 @@ typedef struct {
     uint8_t flash_ok;
     uint8_t fs_ok;
     uint8_t oled_ok;
+    uint32_t last_fault_code;      /* 上一次复位前的故障码，0 = 正常 */
+    uint32_t boot_count;           /* 本次上电后的启动次数（BKP 保留） */
+    uint32_t reset_flags;          /* 本次复位的 RCC_CSR 原始标志 */
+    uint32_t utc;                  /* 当前墙钟（0 = 未设置） */
+    int16_t  mkt_x100;             /* MKT，摄氏度 ×100 */
+    uint8_t  alarm_state;          /* 0=正常, 1=高温, 2=低温 */
+    uint16_t alarm_low_x100;
+    uint16_t alarm_high_x100;
+    uint32_t event_count;
 } UiStatus_t;
 
 #endif /* __UI_TYPES_H */
