@@ -35,9 +35,11 @@
 #define USART1_RX_PIN       GPIO_PIN_10
 #define USART1_RX_PORT      GPIOA
 
-/* LED */
-#define LED_PIN             GPIO_PIN_13
-#define LED_PORT            GPIOC
+/*
+ * LED：PC13 由 CubeMX 在 main.h 中定义（LED_Pin / LED_GPIO_Port），
+ * 当前固件未使用它做指示。这里不再重复定义，避免两套宏不一致。
+ * 注意 PB13 是 KEY_DOWN，与 LED 的 PC13 是不同端口，不存在冲突。
+ */
 
 /* ========== 全局宏定义区 ========== */
 
@@ -85,6 +87,14 @@
 #include "ui_status.h"
 #include "ui_menu.h"
 #include "log.h"
+#include "fault.h"
+
+/* Domain 层（纯逻辑，无 HAL 依赖） */
+#include "domain_time.h"
+#include "domain_record.h"
+#include "domain_alarm.h"
+#include "domain_mkt.h"
+
 #include "cli.h"
 #include "cli_cmd.h"
 #include "config.h"

@@ -24,9 +24,15 @@ typedef struct {
     uint32_t  version;                  /* 配置版本号 */
     uint32_t  sample_interval_ms;       /* 采样间隔 (ms)，默认1000 */
     uint32_t  log_level;                /* 日志等级，默认 LOG_LEVEL_INFO(1) */
-    uint32_t  max_log_records;          /* 最大日志条数，默认500 */
     char      device_name[16];          /* 设备名称，默认 "DataLogger" */
-    uint8_t   reserved[8];              /* 保留字段 */
+
+    /* 报警配置（v2 记录使用；单位为摄氏度 ×100） */
+    int16_t   alarm_low_x100;           /* 下限，默认 200 = 2.00 °C */
+    int16_t   alarm_high_x100;          /* 上限，默认 800 = 8.00 °C */
+    int16_t   alarm_hyst_x100;          /* 回差，默认 50 = 0.50 °C */
+    uint16_t  alarm_min_duration_s;     /* 最短持续时间，默认 60 秒 */
+    uint8_t   reserved[4];              /* 保持结构体 48 字节不变 */
+
     uint32_t  crc;                      /* CRC32 (不含自身) */
 } SysConfig_t;
 
@@ -62,7 +68,7 @@ HAL_StatusTypeDef Config_Save(void);
 
 /**
  * @brief 设置配置项
- * @param key 配置键名 ("sample_ms"/"log_level"/"max_log"/"name")
+ * @param key 配置键名 ("sample_ms"/"log_level"/"name"/"t_low"/"t_high"/"t_hyst"/"t_dur")
  * @param val 配置值字符串
  * @return HAL_OK: 成功, HAL_ERROR: 未知key或值无效
  */

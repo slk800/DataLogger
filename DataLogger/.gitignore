@@ -14,3 +14,13 @@ MDK-ARM/DataLogger/*.sct
 MDK-ARM/.vscode/
 MDK-ARM/*.uvguix.*
 *.lock
+
+# 主机侧测试与演示产物
+build/
+demo/
+tests/__pycache__/
+tools/__pycache__/
+*.pyc
+tests/.domain_test
+tests/.proto_test
+tests/.fault_test

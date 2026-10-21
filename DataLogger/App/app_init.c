@@ -12,7 +12,10 @@
 #include "task_data_producer.h"
 #include "task_display.h"
 #include "task_monitor.h"
+#include "task_proto.h"
+#include "task_recorder.h"
 #include "log.h"
+#include "fault.h"
 #include "config.h"
 #include "sensor_ntc.h"
 #include "ui_status.h"
@@ -33,18 +36,17 @@ TaskHandle_t g_hTaskDataProd  = NULL;
 TaskHandle_t g_hTaskDisplay   = NULL;
 TaskHandle_t g_hTaskMonitor   = NULL;
 
-volatile uint32_t g_fault_code = 0U;
-volatile uint32_t g_fault_task_handle = 0U;
-volatile char g_fault_task_name[16];
-
 /* ========== FreeRTOS钩子函数 ========== */
+/*
+ * 钩子只调用 Fault_HookRecord()：写 volatile 变量 + BKP 备份寄存器。
+ * 不碰 UART、队列、互斥量、动态内存——这些在故障现场都可能二次触发断言，
+ * 从而掩盖最初的根因（见 修复日志.md 中 DataProd 栈溢出案例）。
+ */
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 {
     uint8_t i;
 
-    g_fault_code = 1U;
-    g_fault_task_handle = (uint32_t)xTask;
     for (i = 0U; i < (uint8_t)(sizeof(g_fault_task_name) - 1U); i++)
     {
         if (pcTaskName == NULL || pcTaskName[i] == '\0')
@@ -55,6 +57,8 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
     }
     g_fault_task_name[i] = '\0';
 
+    Fault_HookRecord(FAULT_CODE_STACK_OVERFLOW, (uint32_t)(uintptr_t)xTask, pcTaskName);
+
     for (;;)
     {
         /* 停机 */
@@ -63,9 +67,9 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 
 void vApplicationMallocFailedHook(void)
 {
-    g_fault_code = 2U;
-    g_fault_task_handle = 0U;
     g_fault_task_name[0] = '\0';
+
+    Fault_HookRecord(FAULT_CODE_MALLOC_FAILED, 0U, NULL);
 
     for (;;)
     {
@@ -79,6 +83,12 @@ void App_Init(void)
 {
     /* 1. 初始化串口 */
     BSP_UART_Init();
+
+    /*
+     * 1.5 初始化故障诊断：必须早于任务创建，
+     *     这样故障钩子里的 BKP 写入才不会被写保护挡住。
+     */
+    Fault_Init();
 
     /* 2. 初始化Flash */
     if (BSP_Flash_Init() != HAL_OK)
@@ -147,6 +157,17 @@ void App_Init(void)
     }
 #endif
 
+#if APP_ENABLE_RECORDER
+    if (xTaskCreate(Task_Recorder, "Recorder", TASK_STACK_RECORDER, NULL,
+                    TASK_PRIORITY_RECORDER, NULL) != pdPASS)
+    {
+        BSP_UART_SendString("[SYS] Recorder task create FAILED!\r\n");
+        for (;;)
+        {
+            /* 停机 */
+        }
+    }
+#elif APP_ENABLE_DATA_PRODUCER
     if (xTaskCreate(Task_DataProducer, "DataProd", TASK_STACK_DATA_PROD, NULL,
                     TASK_PRIORITY_DATA_PROD, &g_hTaskDataProd) != pdPASS)
     {
@@ -156,6 +177,7 @@ void App_Init(void)
             /* 停机 */
         }
     }
+#endif
 
     if (xTaskCreate(Task_Display, "Display", TASK_STACK_DISPLAY, NULL,
                     TASK_PRIORITY_DISPLAY, &g_hTaskDisplay) != pdPASS)
@@ -163,9 +185,21 @@ void App_Init(void)
         BSP_UART_SendString("[SYS] Display task create FAILED!\r\n");
         for (;;)
         {
-            /* 鍋滄満 */
+            /* 停机 */
         }
     }
+
+#if APP_ENABLE_PROTO
+    if (xTaskCreate(Task_Proto, "Proto", TASK_STACK_PROTO, NULL,
+                    TASK_PRIORITY_PROTO, NULL) != pdPASS)
+    {
+        BSP_UART_SendString("[SYS] Proto task create FAILED!\r\n");
+        for (;;)
+        {
+            /* 停机 */
+        }
+    }
+#endif
 
 #if APP_ENABLE_UART_MONITOR
     if (xTaskCreate(Task_Monitor, "Monitor", TASK_STACK_MONITOR, NULL,

@@ -43,7 +43,8 @@
 typedef enum {
     FILE_TYPE_LOG    = 0,    /* 日志文件 */
     FILE_TYPE_CONFIG = 1,    /* 配置文件 */
-    FILE_TYPE_DATA   = 2     /* 数据文件 */
+    FILE_TYPE_DATA   = 2,    /* 数据文件 */
+    FILE_TYPE_EVENTS = 3     /* 事件/报警记录 */
 } FileType_e;
 
 /**

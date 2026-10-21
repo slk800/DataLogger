@@ -1,8 +1,8 @@
 /**
  * @file    bsp_flash.h
  * @brief   W25Q64 Flash驱动头文件 - 指令定义与函数声明
- * @author  [Your Name]
- * @date    2025-01-01
+ * @author  SLK800
+ * @date    2026-05
  * @version 1.0
  */
 
@@ -25,6 +25,8 @@
 #define W25Q_CMD_READ_STATUS_REG    0x05    /* 读状态寄存器 */
 #define W25Q_CMD_WRITE_STATUS_REG   0x01    /* 写状态寄存器 */
 #define W25Q_CMD_READ_JEDEC_ID      0x9F    /* 读JEDEC ID */
+#define W25Q_CMD_DEEP_POWER_DOWN    0xB9    /* 进入深睡 */
+#define W25Q_CMD_RELEASE_POWER_DOWN 0xAB    /* 退出深睡 */
 
 /* ========== W25Q64 状态寄存器位定义 ========== */
 #define W25Q_STATUS_BUSY            0x01    /* 忙标志位 */
@@ -42,13 +44,24 @@
 /* ========== Flash驱动函数声明 ========== */
 HAL_StatusTypeDef BSP_Flash_Init(void);
 uint32_t          BSP_Flash_ReadJEDECID(void);
-void              BSP_Flash_WaitBusy(void);
-void              BSP_Flash_WriteEnable(void);
+
+/*
+ * 以下两个函数保留给确实需要在命令之外单独等待/使能的调用者。
+ * 页编程与擦除内部已经完整处理等待与写使能，重复调用是冗余的。
+ * 返回值可能是 HAL_TIMEOUT（BUSY 轮询超时）或 HAL_ERROR（SPI 失败）。
+ */
+HAL_StatusTypeDef BSP_Flash_WaitBusy(void);
+HAL_StatusTypeDef BSP_Flash_WriteEnable(void);
+
 HAL_StatusTypeDef BSP_Flash_ReadData(uint32_t addr, uint8_t *buf, uint32_t len);
 HAL_StatusTypeDef BSP_Flash_PageWrite(uint32_t addr, uint8_t *buf, uint16_t len);
 HAL_StatusTypeDef BSP_Flash_SectorErase(uint32_t addr);
 HAL_StatusTypeDef BSP_Flash_BlockErase(uint32_t addr);
 HAL_StatusTypeDef BSP_Flash_ChipErase(void);
+
+/* Deep Power Down（0xB9）与释放（0xAB），用于低功耗模式 */
+HAL_StatusTypeDef BSP_Flash_DeepSleep(void);
+HAL_StatusTypeDef BSP_Flash_Wake(void);
 
 bool BSP_Flash_Lock(uint32_t timeout_ms);
 void BSP_Flash_Unlock(void);

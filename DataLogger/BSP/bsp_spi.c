@@ -59,6 +59,27 @@ uint8_t BSP_SPI_TransferByte(uint8_t data)
 }
 
 /**
+ * @brief SPI收发单字节（保留 HAL 状态，供需要判错的调用者使用）
+ * @param data 待发送的字节
+ * @param rx   接收字节输出，可为 NULL
+ * @return HAL状态
+ */
+HAL_StatusTypeDef BSP_SPI_TransferByteStatus(uint8_t data, uint8_t *rx)
+{
+    uint8_t rx_data = 0xFF;
+    HAL_StatusTypeDef ret;
+
+    ret = HAL_SPI_TransmitReceive(&hspi1, &data, &rx_data, 1, 100);
+
+    if (rx != NULL)
+    {
+        *rx = rx_data;
+    }
+
+    return ret;
+}
+
+/**
  * @brief SPI收发多字节
  * @param tx_buf 发送缓冲区指针
  * @param rx_buf 接收缓冲区指针

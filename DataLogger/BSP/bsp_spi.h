@@ -16,6 +16,7 @@ void          BSP_SPI_Init(void);
 void          BSP_SPI_CS_Low(void);
 void          BSP_SPI_CS_High(void);
 uint8_t       BSP_SPI_TransferByte(uint8_t data);
+HAL_StatusTypeDef BSP_SPI_TransferByteStatus(uint8_t data, uint8_t *rx);
 HAL_StatusTypeDef BSP_SPI_TransferBuf(uint8_t *tx_buf, uint8_t *rx_buf, uint16_t len);
 
 #endif /* __BSP_SPI_H */
