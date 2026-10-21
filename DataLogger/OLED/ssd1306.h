@@ -31,4 +31,10 @@ void SSD1306_DrawStringAt(uint8_t x, uint8_t y, const char *str);
 HAL_StatusTypeDef SSD1306_UpdateScreen(void);
 uint8_t SSD1306_IsReady(void);
 
+/**
+ * @brief 进入显示休眠（关闭电荷泵，保留 GDDRAM 内容）
+ * @note  低功耗模式下使用。唤醒需调用 SSD1306_Recover()。
+ */
+void SSD1306_Sleep(void);
+
 #endif /* __SSD1306_H */

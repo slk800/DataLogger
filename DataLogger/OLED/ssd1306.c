@@ -79,6 +79,21 @@ uint8_t SSD1306_IsReady(void)
     return s_ready;
 }
 
+void SSD1306_Sleep(void)
+{
+    if (s_ready == 0U)
+    {
+        return;
+    }
+
+    /* 关电荷泵 + 关显示：整屏电流从 ~8 mA 降到 ~10 µA */
+    (void)SSD1306_WriteCommand(0x8DU);   /* Charge Pump Setting */
+    (void)SSD1306_WriteCommand(0x10U);   /* disable */
+    (void)SSD1306_WriteCommand(0xAEU);   /* Display OFF */
+
+    s_ready = 0U;
+}
+
 HAL_StatusTypeDef SSD1306_Recover(void)
 {
     s_ready = 0U;

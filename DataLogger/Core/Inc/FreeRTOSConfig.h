@@ -88,9 +88,23 @@ to exclude the API function. */
 #define INCLUDE_vTaskDelete                 1
 #define INCLUDE_vTaskCleanUpResources       0
 #define INCLUDE_vTaskSuspend                1
-#define INCLUDE_vTaskDelayUntil             0
+
 #define INCLUDE_vTaskDelay                  1
 #define INCLUDE_xTaskGetSchedulerState      1
+/*-----------------------------------------------------------
+ * 低功耗与周期任务支持（W3）
+ *----------------------------------------------------------*/
+/*
+ * configUSE_TICKLESS_IDLE = 2 表示使用"应用自定义"的空闲实现：
+ * port.c 提供 __weak vPortSuppressTicksAndSleep，我们在 App/task_idle_hook.c
+ * 里覆盖它，把 SysTick 关掉后进入 STOP 模式。
+ */
+#define configUSE_TICKLESS_IDLE                 2
+#define configEXPECTED_IDLE_TIME_BEFORE_SLEEP   3
+
+#define INCLUDE_vTaskDelayUntil                 1
+#define INCLUDE_xTaskGetIdleTaskHandle          1
+
 
 /* Cortex-M specific definitions. */
 #ifdef __NVIC_PRIO_BITS
