@@ -1,0 +1,12 @@
+# 统一换行符：脚本与源码一律 LF，避免 Windows 检出后
+# shebang 脚本报 "$'\r': command not found"，或 CI 上 bash 解析失败。
+*.sh        text eol=lf
+*.py        text eol=lf
+*.c         text eol=lf
+*.h         text eol=lf
+*.s         text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.ioc       text eol=lf
+*.uvprojx   text eol=crlf
+*.uvoptx    text eol=crlf
