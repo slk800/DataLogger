@@ -1,7 +1,50 @@
-/build_resume.py
-/image-1.png
-/image-2.png
-/image-3.png
-/云就业-兰州理工大学-大学毕业生推荐.pdf
-/史路宽-嵌入式软件开发-简历.pdf
-/程序源码-有注释版
+# ===== Keil 编译产物 =====
+MDK-ARM/DataLogger/
+*.o
+*.d
+*.crf
+*.dep
+*.lnp
+*.sct
+*.lst
+*.map
+*.axf
+*.hex
+*.bin
+*.build_log.htm
+
+# ===== IDE 与用户状态 =====
+*.uvguix.*
+*.uvoptx.bak
+*.scvd
+JLinkLog.txt
+MDK-ARM/.vscode/
+*.lock
+DebugConfig/
+
+# ===== 主机侧测试与演示产物 =====
+build/
+demo/
+tests/__pycache__/
+tools/__pycache__/
+__pycache__/
+*.pyc
+tests/.domain_test
+tests/.proto_test
+tests/.fault_test
+tests/.alarm_dump
+
+# ===== 本地工作区遗留（不属于项目）=====
+_backup_wip/
+probe.txt
+build_resume.py
+image-*.png
+程序源码-有注释版/
+云就业-*.pdf
+史路宽-*.pdf
+嵌入式面试复盘-*.html
+校招基础题库.md
+面试参考答案.md
+面试问题清单.md
+面试与简历指导.md
+双项目简历与面试指导.md

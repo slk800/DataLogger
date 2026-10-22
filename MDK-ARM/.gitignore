@@ -1,0 +1,22 @@
+# Keil 编译产物
+DataLogger/*.o
+DataLogger/*.d
+DataLogger/*.crf
+DataLogger/*.dep
+DataLogger/*.lnp
+DataLogger/*.sct
+DataLogger/*.htm
+DataLogger/*.lst
+DataLogger/*.map
+DataLogger/*.axf
+DataLogger/*.bin
+DataLogger/*.hex
+
+# Keil 用户状态（含窗口布局、断点等本机信息）
+*.uvguix.*
+*.uvoptx.bak
+*.scvd
+JLinkLog.txt
+
+# 调试器配置
+DebugConfig/
