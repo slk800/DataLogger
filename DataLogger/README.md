@@ -12,7 +12,7 @@ NTC 采集、SSD1306 三键菜单、W25Q64 持久化，支持串口导出、报�
 | 传感器 | 10K NTC，B3950，PA0 / ADC1_IN0 |
 | 时钟 | PCF8563（I2C，CR2032 保持） |
 | 显示 | 0.96" SSD1306，128×64，I2C |
-| 已验证构建 | 0 Error / 0 Warning，ROM **54768** B（83.6%），RAM **18456** B（90.1%） |
+| 已验证构建 | 0 Error / 0 Warning，ROM **55224** B（84.3%），RAM **18760** B（91.6%） |
 
 更完整的接线、菜单和测试见 [系统说明书.md](系统说明书.md)，实现细节见
 [技术实现说明.md](技术实现说明.md)，问题记录见 [修复日志.md](修复日志.md)。
@@ -138,11 +138,11 @@ Home -> System -> Flash -> Log -> Config
 打开 `APP_ENABLE_PROTO=1` 时，文本命令仍可用（Proto 任务内部复用 CLI 命令表）。
 `APP_ENABLE_UART_CLI=1` 是独立的 Shell 任务，**与 Proto 互斥**（争抢接收缓冲区）。
 
-共 16 条：
+共 17 条：
 
 ```text
 help  ls  cat  rm  erase  status  task  heap  set  get  save  loglvl  reset
-time  alarm  mkt
+time  alarm  mkt  i2cscan
 ```
 
 | 命令 | 说明 |
@@ -150,6 +150,7 @@ time  alarm  mkt
 | `time [utc]` | 查看/设置墙钟（写入 PCF8563） |
 | `alarm` | 查看报警阈值、状态与事件数 |
 | `mkt` | 查看当前 MKT |
+| `i2cscan` | 扫描 I2C1，确认 OLED(0x3C) 与 PCF8563(0x51) 是否应答 |
 
 配置键：`sample_ms`、`log_level`、`name`、`t_low`、`t_high`、`t_hyst`、`t_dur`。
 `set` 只改内存，需 `save` 才写入 A/B 区。
@@ -165,7 +166,7 @@ MDK-ARM/DataLogger.uvprojx
 CubeMX 工程：`DataLogger.ioc`。目标芯片 STM32F103C8Tx，下载地址 `0x08000000`。
 
 已验证构建（协议 + v2 记录 + 低功耗全开）：`0 Error(s), 0 Warning(s)`，
-ROM **54768** 字节（83.6%），RAM **18456** 字节（90.1%），剩余约 2 KB。
+ROM **55224** 字节（84.3%），RAM **18760** 字节（91.6%），剩余约 **1.7 KB**。
 
 固件产物（若随仓库发布）：
 
@@ -202,7 +203,7 @@ UI/         六页菜单状态机与 UI 快照
 Log/        文本日志队列、样本 CRC、启动恢复、故障码
 FS/         超级块 / 索引表 / 数据区
 Config/     A/B 双区配置（含报警阈值）
-CLI/        16 条命令
+CLI/        17 条命令
 Core/       CubeMX / HAL
 Utils/      CRC32 等
 MDK-ARM/    Keil 工程
@@ -211,6 +212,7 @@ Domain/     时间换算、记录编解码、报警状态机、MKT（纯逻辑�
 docs/       协议、记录格式、功耗设计、硬件清单
 tools/      PC 端工具（dltool / dlreport / fake_device / demo / power_budget）
 tests/      主机侧单测、交叉验证与端到端测试
+.github/    GitHub Actions（推送即跑五个测试套件）
 ```
 
 `Core/Src/freertos.c` 只保留内核钩子与静态内存回调；CubeMX 自带的 `defaultTask` 及其实验代码已移除。所有应用任务由 `App_Init()` 创建，`main()` 之后由 `vTaskStartScheduler()` 接管。
@@ -296,7 +298,13 @@ python tools/dltool.py --port COM3 verify --name sample -o sample.bin
 python tools/dltool.py --port COM3 plot sample.bin # 生成 CSV（装 matplotlib 则同时出图）
 ```
 
-协议规范见 [docs/protocol.md](docs/protocol.md)。要点：
+协议规范见 [docs/protocol.md](docs/protocol.md)。
+
+示例报告（合成数据，可直接在 GitHub 上预览曲线）：
+[docs/images/demo-report.md](docs/images/demo-report.md)。
+简历条目与面试要点见 [docs/resume-bullets.md](docs/resume-bullets.md)。
+
+要点：
 
 - COBS 分帧 + CRC16/CCITT-FALSE + 序号停等重传
 - `verify` 会比对设备端文件级 CRC32 与 PC 端重算值，不一致即判定导出失败

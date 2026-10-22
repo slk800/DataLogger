@@ -1,0 +1,60 @@
+name: tests
+
+on:
+  push:
+    branches: [main, w2-w3]
+  pull_request:
+    branches: [main]
+
+jobs:
+  host-tests:
+    name: 主机侧测试
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc python3 python3-pip
+          pip3 install pyserial
+
+      # 仓库里项目位于 DataLogger/ 子目录
+      - name: 定位项目根目录
+        id: root
+        run: |
+          if [ -f DataLogger/Protocol/proto_frame.c ]; then
+            echo "dir=DataLogger" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 编译检查（36 个业务源文件）
+        working-directory: ${{ steps.root.outputs.dir }}
+        run: bash tests/run_host_check.sh
+
+      - name: 故障码跨复位保留
+        working-directory: ${{ steps.root.outputs.dir }}
+        run: bash tests/run_fault_test.sh
+
+      - name: 领域层测试
+        working-directory: ${{ steps.root.outputs.dir }}
+        run: bash tests/run_domain_tests.sh
+
+      - name: 协议测试
+        working-directory: ${{ steps.root.outputs.dir }}
+        run: bash tests/run_proto_tests.sh
+
+      - name: 功耗模型与无硬件演示
+        working-directory: ${{ steps.root.outputs.dir }}
+        run: bash tests/run_w3_tests.sh
+
+      - name: 上传演示产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-output
+          path: ${{ steps.root.outputs.dir }}/build/demo/
+          if-no-files-found: ignore
+          retention-days: 7
