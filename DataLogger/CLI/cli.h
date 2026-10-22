@@ -14,7 +14,7 @@
 /* ========== 宏定义 ========== */
 #define CLI_LINE_MAX    80      /* 单行最大字符数 */
 #define CLI_MAX_ARGS    8       /* 最大参数数量 */
-#define CLI_MAX_CMDS    20      /* 命令表最大容量 */
+#define CLI_MAX_CMDS    24      /* 命令表最大容量（当前 20 条，留 4 条余量） */
 
 /* ========== 类型定义 ========== */
 

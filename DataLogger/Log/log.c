@@ -77,6 +77,16 @@ bool Log_EnsureStorageFiles(void)
         ok = (FS_File_Create(LOG_SAMPLE_FILE_NAME, FILE_TYPE_DATA) == FS_OK) && ok;
     }
 
+    /*
+     * 事件文件提前创建，而不是等第一次报警时才懒创建：
+     * 否则从未触发报警的设备上 `dltool events` 会返回 NO_FILE，
+     * 上位机无法区分"没有事件"和"文件不存在"。
+     */
+    if (FS_File_Find(LOG_EVENT_FILE_NAME, &entry, NULL) != FS_OK)
+    {
+        ok = (FS_File_Create(LOG_EVENT_FILE_NAME, FILE_TYPE_EVENTS) == FS_OK) && ok;
+    }
+
     return ok;
 }
 

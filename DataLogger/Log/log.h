@@ -44,7 +44,9 @@ typedef struct {
 extern LogLevel_e g_log_level;
 #define LOG_TEXT_FILE_NAME      "log"
 #define LOG_SAMPLE_FILE_NAME    "sample"
+#define LOG_EVENT_FILE_NAME     "events"
 #define LOG_SAMPLE_RESERVED_BYTES (2UL * 1024UL * 1024UL)
+#define LOG_EVENT_RESERVED_BYTES  (128UL * 1024UL)
 extern uint32_t  g_log_dropped;     /* 因队列满而丢弃的日志数 */
 
 /* ========== 函数声明 ========== */

@@ -26,8 +26,6 @@
 #include "bsp_wakeup.h"
 
 #define RECORDER_FLASH_LOCK_MS  2000U
-#define RECORDER_EVENT_FILE     "events"
-#define RECORDER_EVENT_RESERVED (128UL * 1024UL)   /* 128 KB ≈ 8700 条事件 */
 
 /* 事件记录布局：kind(1) + start(4) + end(4) + min(2) + max(2) + crc16(2) */
 #define EVENT_RECORD_SIZE       15U
@@ -189,15 +187,16 @@ static bool Recorder_AppendEvent(const AlarmEvent_t *ev)
     /* 事件文件不存在则创建（首次运行时 Log_EnsureStorageFiles 只管 log/sample） */
     {
         FileEntry_t entry;
-        if (FS_File_Find(RECORDER_EVENT_FILE, &entry, NULL) != FS_OK)
+        /* Log_Init 已创建该文件；这里只是兜底 */
+        if (FS_File_Find(LOG_EVENT_FILE_NAME, &entry, NULL) != FS_OK)
         {
-            (void)FS_File_Create(RECORDER_EVENT_FILE, FILE_TYPE_EVENTS);
+            (void)FS_File_Create(LOG_EVENT_FILE_NAME, FILE_TYPE_EVENTS);
         }
     }
 
     {
-        bool ok = (FS_File_AppendReserved(RECORDER_EVENT_FILE, buf, sizeof(buf),
-                                          RECORDER_EVENT_RESERVED) == FS_OK);
+        bool ok = (FS_File_AppendReserved(LOG_EVENT_FILE_NAME, buf, sizeof(buf),
+                                          LOG_EVENT_RESERVED_BYTES) == FS_OK);
         BSP_Flash_Unlock();
         if (ok)
         {

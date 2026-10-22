@@ -17,6 +17,7 @@
 #include "fs_file.h"
 #include "utils.h"
 #include "task_recorder.h"
+#include "i2c.h"   /* hi2c1，i2cscan 使用 */
 #include <stdio.h>
 #include <string.h>
 
@@ -49,7 +50,8 @@ static void cmd_ls(int argc, char *argv[])
     uint8_t count = 0;
     uint8_t i;
     char buf[60];
-    const char *type_str[] = {"LOG", "CONFIG", "DATA"};
+    const char *type_str[] = {"LOG", "CONFIG", "DATA", "EVENTS"};
+    const uint8_t type_count = (uint8_t)(sizeof(type_str) / sizeof(type_str[0]));
 
     (void)argc;
     (void)argv;
@@ -67,7 +69,8 @@ static void cmd_ls(int argc, char *argv[])
 
     for (i = 0; i < count; i++)
     {
-        const char *type = (s_fs_entries[i].type <= 2) ? type_str[s_fs_entries[i].type] : "UNK";
+        const char *type = (s_fs_entries[i].type < type_count)
+                         ? type_str[s_fs_entries[i].type] : "UNK";
         snprintf(buf, sizeof(buf), "%-16s %-10lu %s\r\n",
                  s_fs_entries[i].name, s_fs_entries[i].size, type);
         BSP_UART_SendString(buf);
@@ -432,6 +435,51 @@ static void cmd_mkt(int argc, char *argv[])
     BSP_UART_SendString(buf);
 }
 
+/**
+ * @brief 扫描 I2C1 总线上的器件
+ * @note  接线调试时最省时间的工具：接上模块后先跑一次，
+ *        确认 0x3C（OLED）和 0x51（PCF8563）都能应答。
+ *        只做存在性探测（HAL_I2C_IsDeviceReady），不读写寄存器。
+ */
+static void cmd_i2cscan(int argc, char *argv[])
+{
+    uint8_t  addr;
+    uint8_t  found = 0;
+    char     buf[40];
+
+    (void)argc;
+    (void)argv;
+
+    BSP_UART_SendString("Scanning I2C1 (PB6/PB7)...\r\n");
+
+    for (addr = 0x08U; addr < 0x78U; addr++)
+    {
+        uint16_t dev = (uint16_t)((uint16_t)addr << 1);
+
+        if (HAL_I2C_IsDeviceReady(&hi2c1, dev, 2U, 10U) == HAL_OK)
+        {
+            const char *name = "";
+            if (addr == 0x3CU)      name = " (SSD1306 OLED)";
+            else if (addr == 0x51U) name = " (PCF8563 RTC)";
+
+            snprintf(buf, sizeof(buf), "  0x%02X%s\r\n", addr, name);
+            BSP_UART_SendString(buf);
+            found++;
+        }
+    }
+
+    if (found == 0U)
+    {
+        BSP_UART_SendString("  (no devices found)\r\n");
+        BSP_UART_SendString("  check: VCC=3.3V, GND common, SCL=PB6, SDA=PB7\r\n");
+    }
+    else
+    {
+        snprintf(buf, sizeof(buf), "  %u device(s)\r\n", (unsigned)found);
+        BSP_UART_SendString(buf);
+    }
+}
+
 /* ========== 命令注册 ========== */
 
 void CLI_RegisterAllCmds(void)
@@ -452,4 +500,5 @@ void CLI_RegisterAllCmds(void)
     CLI_Register("time",   cmd_time,   "Show/set clock: time [utc]");
     CLI_Register("alarm",  cmd_alarm,  "Show alarm limits and state");
     CLI_Register("mkt",    cmd_mkt,    "Show mean kinetic temperature");
+    CLI_Register("i2cscan", cmd_i2cscan, "Scan I2C1 bus for devices");
 }
