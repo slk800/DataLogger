@@ -349,62 +349,45 @@ Keil 侧验证（需要本机安装 MDK）：
 # 期望：0 Error(s), 0 Warning(s)
 ```
 
-## 分支与提交
+## 关键约定
 
-| 分支 | 内容 |
-| --- | --- |
-| `main` | 初始版本（W1 之前） |
-| `w2-w3` | 技术债清理 + W1/W2/W3 全部改动 |
+`MDK-ARM/` 是**普通目录**（不是子模块），克隆后可直接用 Keil 打开
+`MDK-ARM/DataLogger.uvprojx`。编译产物（`.o` / `.axf` / `.hex` / `.map`）
+已由 `.gitignore` 排除，不会污染仓库。
 
-`w2-w3` 基于独立历史构建，与 `main` **无共同祖先**。合并前建议先对比：
+`.gitattributes` 强制脚本与源码使用 LF。Windows 上 `core.autocrlf=true`
+会把检出的 `.sh` 转成 CRLF，导致 bash 报语法错误——CI 和克隆者都会踩。
 
-```bash
-git fetch datalogger
-git diff --stat datalogger/main datalogger/w2-w3
-```
+`Core/Src/freertos.c` 只保留内核钩子与静态内存回调；CubeMX 自带的
+`defaultTask` 及其实验代码已移除。所有应用任务由 `App_Init()` 创建。
 
-提交按功能划分为三个，可单独查看：
+## 提交历史
 
 ```text
 0ce1cf0  refactor: 清理技术债，补齐工程规范
 8bea9d0  feat: 串口协议、领域层与数据导出工具（W1+W2）
 864fd8d  feat: 低功耗改造与运输场景（W3）
+491b8d2  docs: 更新 README 并补充硬件采购清单
+3e68798  ci: 添加 GitHub Actions 并补充演示素材
+d20ff1d  refactor: 项目移至仓库根目录，移除面试文档与编译产物
+8847d67  fix: 添加 .gitattributes 统一换行符
 ```
 
-### 目录结构差异
+`legacy-main` 分支保留了重构前的旧版本，仅供参考。
 
-本地工作目录把项目放在 `DataLogger/` 子目录下，远端 `main` 是根目录结构。
-合并时 Git 会显示大量文件"移动"，这是路径差异，不是内容丢失。
+## CI
 
-### 推送（需要代理）
-
-本机 GitHub 直连不通，系统代理为 `127.0.0.1:7897`，但 git 未配置。推送时显式指定：
+`.github/workflows/tests.yml` 在每次 push 到 `main` 时运行五个测试套件：
 
 ```bash
-git -c http.proxy=http://127.0.0.1:7897 push datalogger HEAD:refs/heads/w2-w3
+tests/run_host_check.sh      # 编译检查
+tests/run_fault_test.sh      # 故障码跨复位保留
+tests/run_domain_tests.sh    # 时间/记录/报警/MKT
+tests/run_proto_tests.sh     # 协议帧层 + 端到端
+tests/run_w3_tests.sh        # 功耗模型 + 无硬件演示
 ```
 
-如需长期生效（仅当前仓库）：
-
-```bash
-git config http.proxy http://127.0.0.1:7897
-```
-
-### MDK-ARM 子模块
-
-`DataLogger/MDK-ARM` 是 **gitlink**（子模块），但没有 `.gitmodules`，且其自身仓库
-与远端 `slk800/MDK-ARM` 已分叉（本地领先 4 / 落后 3）。
-
-该目录里还有 Keil 编译产物（`.o` / `.axf` / `.hex` / `.map` 等约 235 个文件），
-**尚未纳入 gitignore**。建议在子模块内单独处理：
-
-```bash
-cd DataLogger/MDK-ARM
-printf '*.o\n*.d\n*.crf\n*.lnp\n*.sct\n*.htm\n*.dep\n*.map\nDataLogger/\n' >> .gitignore
-git rm -r --cached DataLogger/*.o DataLogger/*.d 2>/dev/null
-```
-
-在整理干净之前，主仓库的 `DataLogger/MDK-ARM` gitlink 会一直显示为已修改。
+构建产物（demo 目录）会作为 artifact 上传，保留 7 天。
 
 ## License
 
