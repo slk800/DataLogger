@@ -209,7 +209,41 @@ static void test_alarm(void)
         CHECK(started == 0, "flapping temp never starts alarm");
     }
 
-    /* 9. 非法温度不推进状态机 */
+    /* 9. 阈值热更新：重建后立即用当前温度喂一次，应保持报警状态 */
+    {
+        AlarmConfig_t cfg2;
+        AlarmEvent_t dummy;
+        uint32_t now = 10000U;
+
+        Alarm_Init(&ctx, &cfg);
+        Alarm_Feed(&ctx, 900, 0U, 0U, &ev);
+        e = Alarm_Feed(&ctx, 900, 4000U, 4U, &ev);
+        CHECK(e == ALARM_EVENT_STARTED, "hot-update: alarm started before change");
+
+        /*
+         * 收紧阈值。注意 Alarm_Init 会把状态复位成 NORMAL，
+         * 所以重建后需要重新累积 min_duration 才会再次进入报警——
+         * 这正是生产代码里"重建后立即喂一次当前温度"的用意：
+         * 让候选计时从"现在"开始，而不是凭空产生事件。
+         */
+        cfg2 = cfg;
+        cfg2.high_x100 = 700;
+        Alarm_Init(&ctx, &cfg2);
+        (void)Alarm_Feed(&ctx, 900, now, 10U, &dummy);          /* 建立候选 */
+        e = Alarm_Feed(&ctx, 900, now + 1000U, 11U, &ev);       /* 未满 3 s */
+        CHECK(e != ALARM_EVENT_STARTED, "hot-update: no premature start");
+        e = Alarm_Feed(&ctx, 900, now + 4000U, 14U, &ev);       /* 满 3 s */
+        CHECK(e == ALARM_EVENT_STARTED, "hot-update: restarts with new threshold");
+
+        /*
+         * 新上限 700、回差 50，退出阈值 650；用 600 落在回差带外侧。
+         */
+        (void)Alarm_Feed(&ctx, 600, now + 5000U, 15U, &dummy);
+        e = Alarm_Feed(&ctx, 600, now + 9000U, 19U, &ev);
+        CHECK(e == ALARM_EVENT_CLEARED, "hot-update: clears under new threshold");
+    }
+
+    /* 10. 非法温度不推进状态机 */
     Alarm_Init(&ctx, &cfg);
     CHECK(Alarm_Feed(&ctx, RECORD_TEMP_INVALID, 0U, 0U, &ev) == ALARM_EVENT_NONE,
           "invalid temp ignored");

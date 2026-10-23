@@ -31,8 +31,31 @@ typedef struct {
     SensorNtcStatus_e status;
 } SensorNtcData_t;
 
+/* 通道编号：0 = PA0 (IN0)，1 = PA1 (IN1) */
+#define SENSOR_NTC_CH_COUNT     2U
+
 HAL_StatusTypeDef Sensor_NTC_Init(void);
+
+/**
+ * @brief 读取指定通道
+ * @param ch  通道号（0 或 1）
+ * @param out 结果
+ * @note  每路有独立的 IIR 滤波状态，互不干扰。
+ */
+HAL_StatusTypeDef Sensor_NTC_ReadChannel(uint8_t ch, SensorNtcData_t *out);
+
+/**
+ * @brief 读取通道 0（兼容旧接口）
+ */
 HAL_StatusTypeDef Sensor_NTC_Read(SensorNtcData_t *out);
+
+/**
+ * @brief 一次读双通道（扫描模式下单次转换，比两次调用省一半时间）
+ * @param ch0 通道 0 结果，可为 NULL
+ * @param ch1 通道 1 结果，可为 NULL
+ */
+HAL_StatusTypeDef Sensor_NTC_ReadBoth(SensorNtcData_t *ch0, SensorNtcData_t *ch1);
+
 const char *Sensor_NTC_StatusName(SensorNtcStatus_e status);
 
 #endif /* __SENSOR_NTC_H */

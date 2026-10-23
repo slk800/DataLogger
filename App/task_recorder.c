@@ -33,6 +33,7 @@
 static uint32_t   s_utc;               /* 缓存的 UTC，0 = 未设置 */
 static uint8_t    s_clock_lost;
 static AlarmCtx_t s_alarm;
+static AlarmConfig_t s_alarm_cfg;   /* 影子副本，用于检测配置变化 */
 static MktCtx_t   s_mkt;
 static uint32_t   s_event_count;
 static uint8_t    s_seq;
@@ -129,6 +130,78 @@ int16_t Recorder_GetMkt(void)
 uint32_t Recorder_GetEventCount(void)
 {
     return s_event_count;
+}
+
+/* ========== 报警阈值热更新 ========== */
+
+/* 前置声明：本函数会用到下面的 Recorder_AppendEvent */
+static bool Recorder_AppendEvent(const AlarmEvent_t *ev);
+
+/**
+ * @brief 把 g_config 里的阈值同步到运行中的报警状态机
+ * @note
+ * 用一份影子副本比较，只在配置真的变化时才重建状态机。
+ *
+ * 重建时保留当前状态：如果设备正处于高温报警中，改了阈值但新阈值
+ * 仍然判定为越限，不应该产生一次"结束+重新开始"的假事件。
+ * 这里通过 Alarm_Init 之后立即用当前温度重新喂一次来保持连续性。
+ */
+static void Recorder_ApplyAlarmConfigIfChanged(void)
+{
+    AlarmConfig_t acfg;
+
+    acfg.low_x100       = (int16_t)g_config.alarm_low_x100;
+    acfg.high_x100      = (int16_t)g_config.alarm_high_x100;
+    acfg.hyst_x100      = (int16_t)g_config.alarm_hyst_x100;
+    acfg.min_duration_s = (uint16_t)g_config.alarm_min_duration_s;
+
+    if (acfg.low_x100 == s_alarm_cfg.low_x100 &&
+        acfg.high_x100 == s_alarm_cfg.high_x100 &&
+        acfg.hyst_x100 == s_alarm_cfg.hyst_x100 &&
+        acfg.min_duration_s == s_alarm_cfg.min_duration_s)
+    {
+        return;
+    }
+
+    /*
+     * 如果正在报警，先在旧阈值下把它正常结束掉并落盘。
+     * 否则事件文件里会留下一条只有 STARTED、永远没有 CLEARED 的记录，
+     * 上位机解析时会显示成一个跨越到报告末尾的"未闭合区间"。
+     */
+    if (Alarm_IsActive(&s_alarm))
+    {
+        AlarmEvent_t close_ev;
+        uint32_t now_utc = s_utc;
+
+        close_ev.kind = (s_alarm.state == ALARM_STATE_HIGH)
+                      ? ALARM_KIND_HIGH : ALARM_KIND_LOW;
+        close_ev.start_utc = s_alarm.start_utc;
+        close_ev.end_utc = now_utc;
+        close_ev.min_x100 = s_alarm.min_x100;
+        close_ev.max_x100 = s_alarm.max_x100;
+
+        (void)Recorder_AppendEvent(&close_ev);
+        LOG_I("ALARM closed by cfg change kind=%u", close_ev.kind);
+    }
+
+    s_alarm_cfg = acfg;
+    Alarm_Init(&s_alarm, &acfg);
+
+    /*
+     * 用上一次采到的温度重建候选状态。
+     * Alarm_Init 会把 state 复位成 NORMAL，所以这一步只是让
+     * "最短持续时间"从当前时刻开始累积，而不是等待下一次采样。
+     */
+    if (s_last_t1 != RECORD_TEMP_INVALID)
+    {
+        AlarmEvent_t dummy;
+        (void)Alarm_Feed(&s_alarm, s_last_t1,
+                         xTaskGetTickCount(), s_utc, &dummy);
+    }
+
+    LOG_I("ALARM cfg updated: %d..%d hyst=%d dur=%us",
+          (int)acfg.low_x100, (int)acfg.high_x100,
+          (int)acfg.hyst_x100, (unsigned)acfg.min_duration_s);
 }
 
 /* ========== 事件落盘 ========== */
@@ -244,6 +317,7 @@ void Task_Recorder(void *pvParam)
     acfg.hyst_x100      = (int16_t)g_config.alarm_hyst_x100;
     acfg.min_duration_s = (uint16_t)g_config.alarm_min_duration_s;
     Alarm_Init(&s_alarm, &acfg);
+    s_alarm_cfg = acfg;
     Mkt_Init(&s_mkt);
 
     s_event_count = 0U;
@@ -256,6 +330,7 @@ void Task_Recorder(void *pvParam)
     for (;;)
     {
         SensorNtcData_t ntc;
+        SensorNtcData_t ntc2;
         RecordV2_t      rec;
         AlarmEvent_t    ev;
         AlarmEventType_e evt;
@@ -271,11 +346,17 @@ void Task_Recorder(void *pvParam)
             last_sync_ms = now_ms;
         }
 
-        (void)Sensor_NTC_Read(&ntc);
+        /* 报警阈值热更新：配置变更后立即生效，不用重启 */
+        Recorder_ApplyAlarmConfigIfChanged();
 
-        /* 通道 1：真实 NTC；通道 2 未接时保持 INVALID */
+        /* 扫描模式下一次读双通道，比两次单独调用省一半转换时间 */
+        (void)Sensor_NTC_ReadBoth(&ntc, &ntc2);
+
         s_last_t1 = (ntc.status == SENSOR_NTC_OK)
                   ? (int16_t)(ntc.temperature_x10 * 10)
+                  : RECORD_TEMP_INVALID;
+        s_last_t2 = (ntc2.status == SENSOR_NTC_OK)
+                  ? (int16_t)(ntc2.temperature_x10 * 10)
                   : RECORD_TEMP_INVALID;
 
         evt = Alarm_Feed(&s_alarm, s_last_t1, now_ms, s_utc, &ev);
